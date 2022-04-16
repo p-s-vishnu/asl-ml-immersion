@@ -1,0 +1,47 @@
+name: Train valid split
+inputs:
+- {name: project, type: String}
+- {name: train_file_path, type: String}
+- {name: validation_file_path, type: String}
+implementation:
+  container:
+    image: python:3.8
+    command:
+    - sh
+    - -c
+    - |2
+
+      if ! [ -x "$(command -v pip)" ]; then
+          python3 -m ensurepip || python3 -m ensurepip --user || apt-get install python3-pip
+      fi
+
+      PIP_DISABLE_PIP_VERSION_CHECK=1 python3 -m pip install --quiet     --no-warn-script-location 'google-cloud-bigquery' 'google-cloud-aiplatform==1.7.1' 'pandas' 'fsspec' 'gcsfs' 'pyarrow' 'fastparquet' 'kfp==1.8.10' && "$0" "$@"
+    - sh
+    - -ec
+    - |
+      program_path=$(mktemp -d)
+      printf "%s" "$0" > "$program_path/ephemeral_component.py"
+      python3 -m kfp.v2.components.executor_main                         --component_module_path                         "$program_path/ephemeral_component.py"                         "$@"
+    - "\nimport kfp\nfrom kfp.v2 import dsl\nfrom kfp.v2.dsl import *\nfrom typing\
+      \ import *\n\ndef train_valid_split(project:str,\n                      train_file_path:str,\n\
+      \                      validation_file_path:str):\n\n    from google.cloud import\
+      \ bigquery\n    def create_query(phase):\n        if phase == \"TRAIN\":\n \
+      \           return \"\"\"SELECT * \n                        FROM `movielens.ratings`\
+      \ AS table\n                        WHERE MOD(ABS(FARM_FINGERPRINT(TO_JSON_STRING(table))),\
+      \ 10) IN (1, 2, 3, 4)\"\"\"\n        elif phase == \"VALID\":\n            return\
+      \ \"\"\"SELECT *\n                        FROM `movielens.ratings` AS table\n\
+      \                        WHERE MOD(ABS(FARM_FINGERPRINT(TO_JSON_STRING(table))),\
+      \ 10) IN (8)\"\"\"\n\n    def get_file_path(phase):\n        if phase == \"\
+      TRAIN\":\n            return train_file_path\n        return validation_file_path\n\
+      \n    client = bigquery.Client(project=project)\n    for phase in [\"TRAIN\"\
+      , \"VALID\"]:  # TODO: add test dataset later, export to a bq table\n      \
+      \  # 1. Create query string\n        query_string = create_query(phase)\n\n\
+      \        # 2. Load results into DataFrame\n        df = client.query(query_string).to_dataframe()\n\
+      \n        # 3. Write DataFrame to CSV\n        df.to_csv(get_file_path(phase),\
+      \ index_label=False, index=False)\n        print(\"Wrote {} to {}\".format(phase,\
+      \ get_file_path(phase)))\n\n"
+    args:
+    - --executor_input
+    - {executorInput: null}
+    - --function_to_execute
+    - train_valid_split
