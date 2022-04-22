@@ -36,7 +36,6 @@ def features_and_labels(row_data):
     label = row_data.pop(LABEL_COLUMN)
     return row_data, label
 
-
 def load_dataset(pattern, batch_size, num_repeat):
     dataset = tf.data.experimental.make_csv_dataset(
         file_pattern=pattern,
@@ -48,34 +47,28 @@ def load_dataset(pattern, batch_size, num_repeat):
     )
     return dataset.map(features_and_labels)
 
-
 def create_train_dataset(pattern, batch_size):
     dataset = load_dataset(pattern, batch_size, num_repeat=None)
     return dataset.prefetch(1)
 
-
 def create_eval_dataset(pattern, batch_size):
     dataset = load_dataset(pattern, batch_size, num_repeat=1)
     return dataset.prefetch(1)
-
 
 def parse_datetime(s):
     if not isinstance(s, str):
         s = s.numpy().decode("utf-8")
     return datetime.datetime.strptime(s, "%Y-%m-%d %H:%M:%S %Z")
 
-
 def euclidean(params):
     lon1, lat1, lon2, lat2 = params
     londiff = lon2 - lon1
     latdiff = lat2 - lat1
-    return tf.sqrt(londiff * londiff + latdiff * latdiff)
-
+    return tf.sqrt(londiff**2 + latdiff**2)
 
 def get_dayofweek(s):
     ts = parse_datetime(s)
     return DAYS[ts.weekday()]
-
 
 @tf.function
 def dayofweek(ts_in):
@@ -148,7 +141,7 @@ def transform(inputs, numeric_cols, nbuckets):
     )
     ploc = fc.crossed_column([b_plat, b_plon], nbuckets * nbuckets)
     dloc = fc.crossed_column([b_dlat, b_dlon], nbuckets * nbuckets)
-    pd_pair = fc.crossed_column([ploc, dloc], nbuckets**4)
+    pd_pair = fc.crossed_column([ploc, dloc], nbuckets ** 4)
     feature_columns["pickup_and_dropoff"] = fc.embedding_column(pd_pair, 100)
 
     return transformed, feature_columns
@@ -181,26 +174,28 @@ def build_dnn_model(nbuckets, nnsize, lr, string_cols):
     output = layers.Dense(1, name="fare")(x)
 
     model = models.Model(inputs, output)
-    lr_optimizer = tf.keras.optimizers.Adam(learning_rate=lr)
-    model.compile(optimizer=lr_optimizer, loss="mse", metrics=[rmse, "mse"])
+
+    # TODO:
+    optim = tf.keras.optimizers.Adam(learning_rate=lr)
+    model.compile(optimizer=optim, loss='mse', metrics=[rmse, "mse"])
 
     return model
 
 
 def train_and_evaluate(hparams):
+    # TODO:
     batch_size = hparams["batch_size"]
     nbuckets = hparams["nbuckets"]
     lr = hparams["lr"]
-    nnsize = hparams["nnsize"]
+    
+    nnsize = [int(s) for s in hparams["nnsize"].split()]
     eval_data_path = hparams["eval_data_path"]
     num_evals = hparams["num_evals"]
     num_examples_to_train_on = hparams["num_examples_to_train_on"]
     output_dir = hparams["output_dir"]
     train_data_path = hparams["train_data_path"]
 
-    timestamp = datetime.datetime.now().strftime("%Y%m%d%H%M%S")
-    savedmodel_dir = os.path.join(output_dir, "export/savedmodel")
-    model_export_path = os.path.join(savedmodel_dir, timestamp)
+    model_export_path = os.path.join(output_dir, "savedmodel")
     checkpoint_path = os.path.join(output_dir, "checkpoints")
     tensorboard_path = os.path.join(output_dir, "tensorboard")
 
