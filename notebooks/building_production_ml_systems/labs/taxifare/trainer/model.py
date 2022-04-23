@@ -4,6 +4,7 @@ import datetime
 import logging
 import os
 
+import hypertune
 import numpy as np
 import tensorflow as tf
 from tensorflow import feature_column as fc
@@ -36,6 +37,7 @@ def features_and_labels(row_data):
     label = row_data.pop(LABEL_COLUMN)
     return row_data, label
 
+
 def load_dataset(pattern, batch_size, num_repeat):
     dataset = tf.data.experimental.make_csv_dataset(
         file_pattern=pattern,
@@ -47,28 +49,34 @@ def load_dataset(pattern, batch_size, num_repeat):
     )
     return dataset.map(features_and_labels)
 
+
 def create_train_dataset(pattern, batch_size):
     dataset = load_dataset(pattern, batch_size, num_repeat=None)
     return dataset.prefetch(1)
 
+
 def create_eval_dataset(pattern, batch_size):
     dataset = load_dataset(pattern, batch_size, num_repeat=1)
     return dataset.prefetch(1)
+
 
 def parse_datetime(s):
     if not isinstance(s, str):
         s = s.numpy().decode("utf-8")
     return datetime.datetime.strptime(s, "%Y-%m-%d %H:%M:%S %Z")
 
+
 def euclidean(params):
     lon1, lat1, lon2, lat2 = params
     londiff = lon2 - lon1
     latdiff = lat2 - lat1
-    return tf.sqrt(londiff**2 + latdiff**2)
+    return tf.sqrt(londiff * londiff + latdiff * latdiff)
+
 
 def get_dayofweek(s):
     ts = parse_datetime(s)
     return DAYS[ts.weekday()]
+
 
 @tf.function
 def dayofweek(ts_in):
@@ -174,20 +182,32 @@ def build_dnn_model(nbuckets, nnsize, lr, string_cols):
     output = layers.Dense(1, name="fare")(x)
 
     model = models.Model(inputs, output)
-
-    # TODO:
-    optim = tf.keras.optimizers.Adam(learning_rate=lr)
-    model.compile(optimizer=optim, loss='mse', metrics=[rmse, "mse"])
-
+    lr_optimizer = tf.keras.optimizers.Adam(learning_rate=lr)
+    model.compile(optimizer=lr_optimizer, loss="mse", metrics=[rmse, "mse"])
     return model
 
 
+# TODO:
+hpt = hyptertune.HyperTune()
+
+
+# Reporting callback
+# TODO:
+class HPTCallback(tf.keras.callbacks.Callback):
+    def on_epoch_end(self, epoch, logs=None):
+        global hpt
+        # TODO:
+        hpt.report_hyperparameter_tuning_metric(
+            hyperparameter_metric_tag="val_rmse",
+            metric_value=logs["val_rmse"],
+            global_step=epoch,
+        )
+
+
 def train_and_evaluate(hparams):
-    # TODO:
     batch_size = hparams["batch_size"]
     nbuckets = hparams["nbuckets"]
     lr = hparams["lr"]
-    
     nnsize = [int(s) for s in hparams["nnsize"].split()]
     eval_data_path = hparams["eval_data_path"]
     num_evals = hparams["num_evals"]
@@ -220,8 +240,8 @@ def train_and_evaluate(hparams):
         validation_data=evalds,
         epochs=num_evals,
         steps_per_epoch=max(1, steps_per_epoch),
-        verbose=2,  # 0=silent, 1=progress bar, 2=one line per epoch
-        callbacks=[checkpoint_cb, tensorboard_cb],
+        verbose=1,  # 0=silent, 1=progress bar, 2=one line per epoch
+        callbacks=[checkpoint_cb, tensorboard_cb, HPTCallback()],
     )
 
     # Exporting the model with default serving function.
