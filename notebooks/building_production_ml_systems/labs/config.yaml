@@ -1,4 +1,4 @@
-displayName: taxifare_20220423_095725
+displayName: taxifare_20220423_123100
 studySpec:
   metrics:
   - metricId: val_rmse
@@ -24,7 +24,7 @@ studySpec:
   algorithm: ALGORITHM_UNSPECIFIED # results in Bayesian optimization
 trialJobSpec:
   baseOutputDirectory:
-    outputUriPrefix: gs://qwiklabs-gcp-04-853e5675f5e8/taxifare_20220423_095725
+    outputUriPrefix: gs://qwiklabs-gcp-04-853e5675f5e8/taxifare_20220423_123100
   workerPoolSpecs:
   - machineSpec:
       machineType: n1-standard-4

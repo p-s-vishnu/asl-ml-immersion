@@ -188,7 +188,7 @@ def build_dnn_model(nbuckets, nnsize, lr, string_cols):
 
 
 # TODO:
-hpt = hyptertune.HyperTune()
+hpt = hypertune.HyperTune()
 
 
 # Reporting callback

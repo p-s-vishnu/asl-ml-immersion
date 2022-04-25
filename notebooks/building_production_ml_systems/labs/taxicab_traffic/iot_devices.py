@@ -9,7 +9,7 @@ import random
 import time
 
 from google import api_core
-from google.cloud import pubsub
+from google.cloud import pubsub_v1 as pubsub
 
 TIME_FORMAT = "%Y-%m-%d %H:%M:%S"
 DEFAULT_TOPIC = "taxi_rides"
